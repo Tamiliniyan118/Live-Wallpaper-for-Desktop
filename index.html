@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EtherFlow Workspace</title>
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js via Global CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0a0a0a;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            color: #e5e7eb;
+            user-select: none;
+        }
+
+        /* Glassmorphism Panel */
+        .glass-panel {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+            border-radius: 24px;
+            transition: all 0.7s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+
+        .panel-hidden {
+            opacity: 0;
+            transform: scale(0.95) translateY(20px);
+            pointer-events: none;
+            filter: blur(10px);
+        }
+
+        .panel-visible {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+            pointer-events: auto;
+            filter: blur(0);
+        }
+
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        /* Pulse Animation for Trigger */
+        @keyframes soft-pulse {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.1); }
+        }
+        .animate-soft-pulse {
+            animation: soft-pulse 4s infinite ease-in-out;
+        }
+
+        /* Checkbox Styling */
+        .task-checkbox {
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .task-checkbox:checked {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        .task-checkbox:checked::after {
+            content: "✓";
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        /* Fade/Strike animation */
+        .task-text {
+            transition: all 0.5s ease;
+        }
+        .task-completed {
+            color: rgba(255, 255, 255, 0.2);
+            text-decoration: line-through;
+            transform: scale(0.98);
+        }
+
+        /* Energy Bar */
+        .energy-bar-fill {
+            transition: height 1s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.4"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <!-- Three.js Canvas Container -->
+    <div id="canvas-container" class="fixed inset-0 z-0"></div>
+
+    <!-- Center Trigger Button -->
+    <button id="trigger-btn" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 focus:outline-none transition-all duration-700">
+        <div class="relative flex items-center justify-center w-12 h-12">
+            <div class="absolute inset-0 rounded-full border border-white/5 animate-ping opacity-20"></div>
+            <span class="text-2xl animate-soft-pulse filter drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">👽</span>
+        </div>
+    </button>
+
+    <!-- Task List Panel -->
+    <div id="task-panel" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 w-full max-w-sm mx-4 glass-panel panel-hidden">
+        <!-- Energy Bar -->
+        <div class="absolute left-0 top-0 bottom-0 w-[2px] bg-white/5 overflow-hidden rounded-l-3xl">
+            <div id="energy-bar-fill" class="energy-bar-fill absolute bottom-0 left-0 w-full bg-white/40 shadow-[0_0_8px_rgba(255,255,255,0.4)]" style="height: 0%"></div>
+        </div>
+
+        <div class="p-8">
+            <header class="mb-6 ml-2">
+                <h1 class="text-xl font-medium text-white/90 tracking-tight">🧿</h1>
+                <p class="text-[10px] text-white/30 uppercase tracking-[0.25em] mt-1">shigoto</p>
+            </header>
+
+            <!-- Task List -->
+            <div id="task-list" class="space-y-1 max-h-[320px] overflow-y-auto px-2 custom-scrollbar">
+                <!-- Tasks injected here -->
+            </div>
+
+            <!-- Task Adder -->
+            <form id="task-form" class="mt-6 pt-4 border-t border-white/5 ml-2">
+                <input
+                    id="task-input"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="New objective..."
+                    class="w-full bg-transparent border-none text-sm font-light text-white/60 placeholder:text-white/10 focus:outline-none focus:placeholder:opacity-0 transition-all"
+                >
+            </form>
+
+            <footer class="mt-4 flex justify-between items-center text-[8px] text-white/10 uppercase tracking-[0.3em] ml-2">
+                <span id="task-counter">0 / 0 Resolved</span>
+                <span>Hades Tasks</span>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Background Vignette Overlay -->
+    <div id="vignette" class="fixed inset-0 pointer-events-none z-30 transition-opacity duration-1000 opacity-0 bg-[#0a0a0a]/30 backdrop-blur-[2px]"></div>
+
+    <script>
+        /**
+         * 1. TASK LOGIC & STATE
+         */
+        let tasks = JSON.parse(localStorage.getItem('etherflow-tasks-v2') || '[]');
+        let isPanelOpen = false;
+
+        const taskPanel = document.getElementById('task-panel');
+        const triggerBtn = document.getElementById('trigger-btn');
+        const taskList = document.getElementById('task-list');
+        const taskForm = document.getElementById('task-form');
+        const taskInput = document.getElementById('task-input');
+        const energyBarFill = document.getElementById('energy-bar-fill');
+        const taskCounter = document.getElementById('task-counter');
+        const vignette = document.getElementById('vignette');
+
+        function saveTasks() {
+            localStorage.setItem('etherflow-tasks-v2', JSON.stringify(tasks));
+            renderTasks();
+        }
+
+        function renderTasks() {
+            taskList.innerHTML = '';
+            tasks.sort((a, b) => b.createdAt - a.createdAt).forEach(task => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center gap-4 py-3 group opacity-0 translate-y-2';
+                div.style.animation = 'fadeInUp 0.4s forwards ease-out';
+                
+                div.innerHTML = `
+                    <input type="checkbox" class="task-checkbox" ${task.completed ? 'checked' : ''}>
+                    <span class="flex-grow text-sm font-light tracking-wide task-text ${task.completed ? 'task-completed' : 'text-white/70'}">${task.text}</span>
+                    <button class="delete-btn opacity-0 group-hover:opacity-100 p-1 hover:text-white/60 transition-all text-white/10">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                `;
+
+                const checkbox = div.querySelector('.task-checkbox');
+                checkbox.addEventListener('change', () => {
+                    task.completed = checkbox.checked;
+                    saveTasks();
+                });
+
+                const deleteBtn = div.querySelector('.delete-btn');
+                deleteBtn.addEventListener('click', () => {
+                    tasks = tasks.filter(t => t.id !== task.id);
+                    saveTasks();
+                });
+
+                taskList.appendChild(div);
+            });
+
+            // Update Progress
+            const completedCount = tasks.filter(t => t.completed).length;
+            const progress = tasks.length > 0 ? (completedCount / tasks.length) * 100 : 0;
+            energyBarFill.style.height = `${progress}%`;
+            taskCounter.textContent = `${completedCount} / ${tasks.length} Resolved`;
+            
+            if (progress === 100 && tasks.length > 0) {
+                energyBarFill.classList.add('shadow-[0_0_15px_rgba(255,255,255,0.6)]');
+            } else {
+                energyBarFill.classList.remove('shadow-[0_0_15px_rgba(255,255,255,0.6)]');
+            }
+        }
+
+        triggerBtn.addEventListener('click', () => {
+            isPanelOpen = !isPanelOpen;
+            if (isPanelOpen) {
+                taskPanel.classList.remove('panel-hidden');
+                taskPanel.classList.add('panel-visible');
+                vignette.classList.remove('opacity-0');
+                vignette.classList.add('opacity-100');
+                triggerBtn.classList.add('scale-75', 'opacity-40', 'blur-[1px]');
+            } else {
+                taskPanel.classList.add('panel-hidden');
+                taskPanel.classList.remove('panel-visible');
+                vignette.classList.add('opacity-0');
+                vignette.classList.remove('opacity-100');
+                triggerBtn.classList.remove('scale-75', 'opacity-40', 'blur-[1px]');
+            }
+        });
+
+        taskForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = taskInput.value.trim();
+            if (text) {
+                tasks.push({
+                    id: Math.random().toString(36).substr(2, 9),
+                    text: text,
+                    completed: false,
+                    createdAt: Date.now()
+                });
+                taskInput.value = '';
+                saveTasks();
+            }
+        });
+
+        // Initialize state
+        renderTasks();
+
+        /**
+         * 2. THREE.JS BACKGROUND LOGIC
+         */
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const targetMouse = { x: 0.5, y: 0.5 };
+        const currentMouse = { x: 0.5, y: 0.5 };
+        const BALANCED_SPEED = 0.8;
+        let lastTime = 0;
+        let accumulatedTime = 0;
+
+        const vertexShader = `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = vec4(position, 1.0);
+            }
+        `;
+
+        const fragmentShader = `
+            uniform float uTime;
+            uniform vec2 uResolution;
+            uniform vec2 uMouse;
+            varying vec2 vUv;
+
+            vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
+            float snoise(vec2 v) {
+                const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+                vec2 i  = floor(v + dot(v, C.yy) );
+                vec2 x0 = v -   i + dot(i, C.xx);
+                vec2 i1;
+                i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+                vec4 x12 = x0.xyxy + C.xxzz;
+                x12.xy -= i1;
+                i = mod(i, 289.0);
+                vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 )) + i.x + vec3(0.0, i1.x, 1.0 ));
+                vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+                m = m*m ; m = m*m ;
+                vec3 x = 2.0 * fract(p * C.www) - 1.0;
+                vec3 h = abs(x) - 0.5;
+                vec3 ox = floor(x + 0.5);
+                vec3 a0 = x - ox;
+                m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+                vec3 g;
+                g.x  = a0.x  * x0.x  + h.x  * x0.y;
+                g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+                return 130.0 * dot(m, g);
+            }
+
+            void main() {
+                vec2 uv = vUv;
+                vec2 aspectUv = (uv - 0.5) * vec2(uResolution.x / uResolution.y, 1.0) + 0.5;
+                float dist = distance(aspectUv, uMouse);
+                float mouseEffect = 1.0 / (1.0 + dist * 10.0);
+                
+                vec2 p = aspectUv * 2.8;
+                float n = snoise(p * 0.4 + vec2(uTime * 0.02, uTime * 0.008));
+                
+                float val = snoise(p + n * 0.5 + uTime * 0.06);
+                val += snoise(p * 1.4 - n * 1.0 + uTime * 0.03) * 0.5;
+                
+                float lines = sin(val * 14.0 + (mouseEffect * 3.5));
+                float lineMask = smoothstep(0.88, 0.98, lines);
+                
+                vec3 bgColor = vec3(0.04); 
+                vec3 lineHighlight = vec3(0.65) * (0.15 + 0.85 * mouseEffect);
+                vec3 color = mix(bgColor, lineHighlight, lineMask * 0.1);
+                
+                float vignette = smoothstep(2.0, 0.3, length(uv - 0.5));
+                color *= vignette;
+
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `;
+
+        const uniforms = {
+            uTime: { value: 0 },
+            uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+            uMouse: { value: new THREE.Vector2(0.5, 0.5) }
+        };
+
+        const material = new THREE.ShaderMaterial({
+            vertexShader,
+            fragmentShader,
+            uniforms
+        });
+
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+        scene.add(mesh);
+
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            targetMouse.x = e.clientX / window.innerWidth;
+            targetMouse.y = 1.0 - (e.clientY / window.innerHeight);
+        });
+
+        function animate(time) {
+            const delta = (time - lastTime) * 0.001 || 0;
+            lastTime = time;
+            
+            accumulatedTime += delta * BALANCED_SPEED;
+            uniforms.uTime.value = accumulatedTime;
+            
+            // Smooth inertia
+            currentMouse.x += (targetMouse.x - currentMouse.x) * 0.035;
+            currentMouse.y += (targetMouse.y - currentMouse.y) * 0.035;
+            uniforms.uMouse.value.set(currentMouse.x, currentMouse.y);
+            
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+
+        requestAnimationFrame(animate);
+    </script>
+
+    <style>
+        /* CSS Animations */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

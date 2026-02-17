@@ -1,2 +1,12 @@
-# Live-Wallpaper-for-Desktop
-A centralized desktop "to-do" worklist background to focus on hobbies and growth
+
+
+
+## To Run Locally
+
+**Prerequisites:**  Node.js
+
+
+1. Install dependencies:
+   `npm install`
+2. Run the app:
+   `npm run dev`
